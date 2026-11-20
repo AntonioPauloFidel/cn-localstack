@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<form class="card" method="post">
+  <h2>Entrar</h2>
+  <label>E-mail<br><input type="email" name="email" required autofocus></label><br>
+  <label>Senha<br><input type="password" name="senha" required></label><br>
+  <button type="submit">Entrar</button>
+  <p>Não tem conta? <a href="{{ url_for('cadastro') }}">Cadastre-se</a></p>
+</form>
+{% endblock %}

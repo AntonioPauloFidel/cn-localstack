@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<form class="card" method="post">
+  <h2>Criar conta</h2>
+  <label>Nome<br><input type="text" name="nome" value="{{ request.form.nome }}" required autofocus></label><br>
+  <label>E-mail<br><input type="email" name="email" value="{{ request.form.email }}" required></label><br>
+  <label>Senha (mín. 6 caracteres)<br><input type="password" name="senha" minlength="6" required></label><br>
+  <button type="submit">Cadastrar</button>
+  <p>Já tem conta? <a href="{{ url_for('login') }}">Entrar</a></p>
+</form>
+{% endblock %}
