@@ -1,0 +1,8 @@
+.venv/
+build/
+function.zip
+volume/
+resultado/
+exemplos/
+.env
+__pycache__/
