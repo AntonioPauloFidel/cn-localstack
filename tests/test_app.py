@@ -11,6 +11,7 @@ from moto import mock_aws
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
 
 BUCKET = "imagens-entrada"
+SAIDA = "imagens-saida"
 TABELA = "usuarios"
 
 
@@ -23,6 +24,7 @@ def ambiente(monkeypatch):
     with mock_aws():
         s3 = boto3.client("s3")
         s3.create_bucket(Bucket=BUCKET)
+        s3.create_bucket(Bucket=SAIDA)
         dynamo = boto3.client("dynamodb")
         dynamo.create_table(
             TableName=TABELA,
@@ -193,3 +195,70 @@ def test_usuario_nao_ve_nem_baixa_imagem_de_outro(ambiente):
     assert bia.get("/download/segredo-da-ana.png").status_code == 404
     chave_ana = chaves(s3)[0]
     assert bia.get(f"/download/../../{chave_ana}").status_code == 404
+
+
+# ---------- Atividade 3: upload pelo app -> Lambda -> galeria mostra o resultado ----------
+
+def imagem_png(tamanho=(1600, 1000)):
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", tamanho, (200, 30, 30)).save(buf, "PNG")
+    return buf.getvalue()
+
+
+def disparar_lambda(s3, monkeypatch):
+    """Simula o gatilho do S3: chama a Lambda real com o evento ObjectCreated."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lambda"))
+    monkeypatch.setenv("OUTPUT_BUCKET", SAIDA)
+    import handler
+    importlib.reload(handler)
+    from urllib.parse import quote_plus
+    registros = [{"s3": {"bucket": {"name": BUCKET}, "object": {"key": quote_plus(k, safe="/")}}}
+                 for k in chaves(s3)]
+    return handler.lambda_handler({"Records": registros}, None)
+
+
+def test_antes_da_lambda_mostra_processando_e_atualiza_sozinho(logado):
+    c, _ = logado
+    html = enviar(c, "foto.png", imagem_png()).get_data(as_text=True)
+    assert "processando" in html
+    assert 'http-equiv="refresh"' in html
+
+
+def test_depois_da_lambda_mostra_miniatura_e_permite_baixar(logado, monkeypatch):
+    from PIL import Image
+    c, s3 = logado
+    enviar(c, "foto.png", imagem_png())
+
+    disparar_lambda(s3, monkeypatch)
+
+    html = c.get("/").get_data(as_text=True)
+    assert "processando" not in html
+    assert 'http-equiv="refresh"' not in html
+    assert "/processada/foto.png" in html
+
+    miniatura = c.get("/processada/foto.png")
+    assert "inline" in miniatura.headers["Content-Disposition"]
+    img = Image.open(io.BytesIO(miniatura.data))
+    assert img.size == (512, 320) and img.mode == "L"
+
+    baixar = c.get("/processada/foto.png?baixar=1")
+    assert "attachment" in baixar.headers["Content-Disposition"]
+    assert baixar.data == miniatura.data
+
+
+def test_usuario_nao_acessa_imagem_processada_de_outro(ambiente, monkeypatch):
+    app, s3, _ = ambiente
+    ana, bia = app.test_client(), app.test_client()
+    cadastrar(ana); entrar(ana)
+    cadastrar(bia, nome="Bia", email="bia@ulbra.br"); entrar(bia, "bia@ulbra.br")
+    enviar(ana, "foto.png", imagem_png())
+    disparar_lambda(s3, monkeypatch)
+
+    assert ana.get("/processada/foto.png").status_code == 200
+    assert bia.get("/processada/foto.png").status_code == 404
+
+
+def test_processada_exige_login(cliente):
+    c, _ = cliente
+    assert c.get("/processada/foto.png").status_code == 302
