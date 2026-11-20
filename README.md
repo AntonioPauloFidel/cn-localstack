@@ -45,7 +45,7 @@ flowchart LR
 Pré-requisitos: Docker e Python 3.
 
 ```bash
-# 1. Ambiente Python (aws-cli, awslocal, boto3, pillow)
+# 1. Ambiente Python (aws-cli, boto3, pillow, pytest, moto)
 python3 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
 
@@ -71,15 +71,27 @@ rotação EXIF e a garantia de não gravar no bucket de entrada (evita loop).
 .venv/bin/python -m pytest -v
 ```
 
-Comandos úteis:
+Comandos úteis (mesmo padrão do slide: `aws --endpoint-url`):
 
 ```bash
 source .venv/bin/activate
-awslocal s3 ls s3://imagens-saida/processado/                  # listar resultados
-awslocal logs tail /aws/lambda/processa-imagem                 # logs da função
+export AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1
+E=--endpoint-url=http://localhost:4566
+
+aws $E s3 ls --recursive s3://imagens-saida/                   # listar resultados
+aws $E logs filter-log-events --log-group-name /aws/lambda/processa-imagem \
+    --query 'events[].message' --output text                   # logs da função
 docker compose logs -f localstack                              # logs do LocalStack
 docker compose down                                            # desligar tudo
 ```
+
+### Versão do LocalStack
+
+O `docker-compose.yml` fixa a **4.14.0**, a última versão Community que roda sem
+conta. A partir de 2026 a imagem `latest` exige `LOCALSTACK_AUTH_TOKEN` e sai com
+*"License activation failed"*. Para usar a mais nova, crie uma conta em
+app.localstack.cloud, coloque o token num arquivo `.env` (já ignorado pelo git) e
+rode `LOCALSTACK_VERSION=latest docker compose up -d`.
 
 ## Estrutura
 
