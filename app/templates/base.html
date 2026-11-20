@@ -21,7 +21,11 @@
 <body>
   <header>
     <h1>📦 Galeria S3</h1>
-    {% block usuario %}{% endblock %}
+    {% if session.usuario_id %}
+    <form action="{{ url_for('logout') }}" method="post">
+      Olá, <strong>{{ session.nome }}</strong> <button type="submit">Sair</button>
+    </form>
+    {% endif %}
   </header>
   {% for categoria, msg in get_flashed_messages(with_categories=true) %}
     <div class="flash {{ categoria }}">{{ msg }}</div>

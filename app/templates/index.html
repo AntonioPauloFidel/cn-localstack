@@ -6,16 +6,16 @@
   <button type="submit">Enviar</button>
 </form>
 
-<h2>Imagens no bucket</h2>
+<h2>Minhas imagens</h2>
 {% if arquivos %}
 <table>
   <tr><th>Arquivo</th><th>Tamanho</th><th>Enviado em</th><th></th></tr>
   {% for a in arquivos %}
   <tr>
-    <td>{{ a.Key }}</td>
+    <td>{{ a.Nome }}</td>
     <td>{{ (a.Size / 1024) | round(1) }} KB</td>
     <td>{{ a.LastModified.strftime('%d/%m/%Y %H:%M') }}</td>
-    <td><a href="{{ url_for('download', chave=a.Key) }}">Baixar</a></td>
+    <td><a href="{{ url_for('download', nome=a.Nome) }}">Baixar</a></td>
   </tr>
   {% endfor %}
 </table>
