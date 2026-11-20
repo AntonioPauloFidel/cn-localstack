@@ -14,3 +14,22 @@ services:
       - ./volume:/var/lib/localstack
       # necessário para o LocalStack criar os containers que executam a Lambda
       - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      retries: 20
+
+  web:
+    build: ./app
+    container_name: galeria-web
+    ports:
+      - "127.0.0.1:5000:5000"
+    environment:
+      # o app fala com o LocalStack pelo nome do serviço na rede do compose
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+    depends_on:
+      localstack:
+        condition: service_healthy
