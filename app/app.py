@@ -2,6 +2,8 @@
 
 Atividade 1 — upload, listagem e download de imagens no S3.
 Atividade 2 — contas de usuário no DynamoDB; cada usuário vê só as próprias imagens.
+Atividade 3 — o upload dispara uma Lambda (S3 -> Lambda) que gera a versão processada
+              no bucket de saída; a galeria mostra e permite baixar o resultado.
 """
 import os
 import re
@@ -17,6 +19,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 BUCKET = os.environ.get("BUCKET_ENTRADA", "imagens-entrada")
+BUCKET_SAIDA = os.environ.get("BUCKET_SAIDA", "imagens-saida")
+PREFIXO_SAIDA = "processado/"  # onde a Lambda grava o resultado
 TABELA = os.environ.get("TABELA_USUARIOS", "usuarios")
 EXTENSOES = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -116,9 +120,14 @@ def logout():
 def index():
     resp = s3().list_objects_v2(Bucket=BUCKET, Prefix=prefixo())
     arquivos = sorted(resp.get("Contents", []), key=lambda o: o["LastModified"], reverse=True)
+    # Atividade 3: quais já foram processados pela Lambda?
+    saida = s3().list_objects_v2(Bucket=BUCKET_SAIDA, Prefix=PREFIXO_SAIDA + prefixo())
+    prontos = {o["Key"][len(PREFIXO_SAIDA + prefixo()):] for o in saida.get("Contents", [])}
     for a in arquivos:
         a["Nome"] = a["Key"][len(prefixo()):]
-    return render_template("index.html", arquivos=arquivos)
+        a["Processada"] = a["Nome"] in prontos
+    pendentes = any(not a["Processada"] for a in arquivos)
+    return render_template("index.html", arquivos=arquivos, pendentes=pendentes)
 
 
 @app.post("/upload")
@@ -143,12 +152,26 @@ def upload():
 @app.get("/download/<path:nome>")
 @login_obrigatorio
 def download(nome):
+    return enviar_objeto(BUCKET, prefixo() + nome, nome, anexo=True)
+
+
+@app.get("/processada/<path:nome>")
+@login_obrigatorio
+def processada(nome):
+    """Atividade 3: resultado gerado pela Lambda (inline para a miniatura, ou ?baixar=1)."""
+    anexo = request.args.get("baixar") == "1"
+    return enviar_objeto(BUCKET_SAIDA, PREFIXO_SAIDA + prefixo() + nome,
+                         f"processada-{nome}", anexo=anexo)
+
+
+def enviar_objeto(bucket, chave, nome_arquivo, anexo):
     try:
-        obj = s3().get_object(Bucket=BUCKET, Key=prefixo() + nome)
+        obj = s3().get_object(Bucket=bucket, Key=chave)
     except ClientError:
         abort(404)
+    disposicao = "attachment" if anexo else "inline"
     return Response(obj["Body"].iter_chunks(), mimetype=obj.get("ContentType"),
-                    headers={"Content-Disposition": f'attachment; filename="{nome}"'})
+                    headers={"Content-Disposition": f'{disposicao}; filename="{nome_arquivo}"'})
 
 
 if __name__ == "__main__":
