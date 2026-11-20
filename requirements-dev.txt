@@ -1,5 +1,4 @@
 awscli
-awscli-local
 boto3
 pillow
 pytest

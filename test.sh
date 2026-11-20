@@ -5,6 +5,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 export PATH="$PWD/.venv/bin:$PATH"
 export AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1
+# Mesmo padrão do slide: aws-cli apontando para o endpoint do LocalStack
+AWS="aws --endpoint-url=${ENDPOINT:-http://localhost:4566}"
 
 IMG=${1:-}
 if [ -z "$IMG" ]; then
@@ -22,13 +24,13 @@ fi
 
 NOME=$(basename "$IMG")
 echo ">> Enviando $NOME para s3://imagens-entrada"
-awslocal s3 cp "$IMG" "s3://imagens-entrada/$NOME"
+$AWS s3 cp "$IMG" "s3://imagens-entrada/$NOME"
 
 echo ">> Aguardando a Lambda processar..."
 for i in $(seq 1 30); do
-    if awslocal s3api head-object --bucket imagens-saida --key "processado/$NOME" >/dev/null 2>&1; then
+    if $AWS s3api head-object --bucket imagens-saida --key "processado/$NOME" >/dev/null 2>&1; then
         mkdir -p resultado
-        awslocal s3 cp "s3://imagens-saida/processado/$NOME" "resultado/$NOME" >/dev/null
+        $AWS s3 cp "s3://imagens-saida/processado/$NOME" "resultado/$NOME" >/dev/null
         echo "OK! Resultado baixado em resultado/$NOME"
         python3 -c "from PIL import Image; a=Image.open('$IMG'); b=Image.open('resultado/$NOME'); print(f'Original: {a.size} {a.mode}  ->  Processada: {b.size} {b.mode}')"
         exit 0
