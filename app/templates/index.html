@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block head %}{% if pendentes %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
 {% block conteudo %}
 <form class="card" action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
   <strong>Enviar imagem</strong><br>
@@ -9,13 +10,21 @@
 <h2>Minhas imagens</h2>
 {% if arquivos %}
 <table>
-  <tr><th>Arquivo</th><th>Tamanho</th><th>Enviado em</th><th></th></tr>
+  <tr><th>Arquivo</th><th>Tamanho</th><th>Enviado em</th><th>Original</th><th>Processada (Lambda)</th></tr>
   {% for a in arquivos %}
   <tr>
     <td>{{ a.Nome }}</td>
     <td>{{ (a.Size / 1024) | round(1) }} KB</td>
     <td>{{ a.LastModified.strftime('%d/%m/%Y %H:%M') }}</td>
     <td><a href="{{ url_for('download', nome=a.Nome) }}">Baixar</a></td>
+    <td>
+      {% if a.Processada %}
+        <img class="mini" src="{{ url_for('processada', nome=a.Nome) }}" alt="miniatura de {{ a.Nome }}">
+        <a href="{{ url_for('processada', nome=a.Nome, baixar=1) }}">Baixar</a>
+      {% else %}
+        <span class="muted">⏳ processando…</span>
+      {% endif %}
+    </td>
   </tr>
   {% endfor %}
 </table>
