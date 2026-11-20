@@ -1,7 +1,9 @@
 services:
   localstack:
     container_name: localstack
-    image: localstack/localstack:${LOCALSTACK_VERSION:-latest}
+    # 4.14.0 é a última versão Community que roda sem auth token.
+    # A partir de 2026.x a imagem exige LOCALSTACK_AUTH_TOKEN (conta em app.localstack.cloud).
+    image: localstack/localstack:${LOCALSTACK_VERSION:-4.14.0}
     ports:
       - "127.0.0.1:4566:4566"            # endpoint unificado de todos os serviços
       - "127.0.0.1:4510-4559:4510-4559"  # portas específicas por serviço
