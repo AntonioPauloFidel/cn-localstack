@@ -1,0 +1,14 @@
+services:
+  localstack:
+    container_name: localstack
+    image: localstack/localstack:${LOCALSTACK_VERSION:-latest}
+    ports:
+      - "127.0.0.1:4566:4566"            # endpoint unificado de todos os serviços
+      - "127.0.0.1:4510-4559:4510-4559"  # portas específicas por serviço
+    environment:
+      - DEBUG=1
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN:-}
+    volumes:
+      - ./volume:/var/lib/localstack
+      # necessário para o LocalStack criar os containers que executam a Lambda
+      - /var/run/docker.sock:/var/run/docker.sock
