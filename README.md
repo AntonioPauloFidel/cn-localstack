@@ -47,7 +47,7 @@ Pré-requisitos: Docker e Python 3.
 ```bash
 # 1. Ambiente Python (aws-cli, awslocal, boto3, pillow)
 python3 -m venv .venv
-.venv/bin/pip install awscli awscli-local boto3 pillow
+.venv/bin/pip install -r requirements-dev.txt
 
 # 2. Subir o LocalStack
 docker compose up -d
@@ -58,6 +58,17 @@ docker compose up -d
 # 4. Testar (sem argumento gera uma imagem de teste; ou passe a sua)
 ./test.sh
 ./test.sh ~/Imagens/foto.jpg
+```
+
+## Testes automatizados
+
+Os testes rodam a Lambda contra um S3 simulado em memória (moto), **sem precisar
+do Docker**. Cobrem PNG/JPEG, proporção, imagem pequena (não amplia), nomes com
+espaço/acento, arquivo que não é imagem, vários registros no mesmo evento,
+rotação EXIF e a garantia de não gravar no bucket de entrada (evita loop).
+
+```bash
+.venv/bin/python -m pytest -v
 ```
 
 Comandos úteis:
