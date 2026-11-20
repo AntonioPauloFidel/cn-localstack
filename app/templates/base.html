@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Galeria S3 — LocalStack</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+    header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; margin-bottom: 1.5rem; }
+    form.card { background: #f6f7f9; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; }
+    input, button { font-size: 1rem; padding: .4rem .6rem; margin: .2rem 0; }
+    button { cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: .5rem; border-bottom: 1px solid #eee; vertical-align: middle; }
+    img.mini { max-height: 64px; border-radius: 4px; }
+    .flash { padding: .6rem 1rem; border-radius: 6px; margin-bottom: 1rem; }
+    .ok { background: #e3f6e8; } .erro { background: #fde8e8; }
+    .muted { color: #888; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📦 Galeria S3</h1>
+    {% block usuario %}{% endblock %}
+  </header>
+  {% for categoria, msg in get_flashed_messages(with_categories=true) %}
+    <div class="flash {{ categoria }}">{{ msg }}</div>
+  {% endfor %}
+  {% block conteudo %}{% endblock %}
+</body>
+</html>
