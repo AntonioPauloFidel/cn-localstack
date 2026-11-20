@@ -1,32 +1,128 @@
-"""Atividade 1 — upload, listagem e download de imagens no S3 (LocalStack)."""
+"""Galeria de imagens na "nuvem" (LocalStack).
+
+Atividade 1 — upload, listagem e download de imagens no S3.
+Atividade 2 — contas de usuário no DynamoDB; cada usuário vê só as próprias imagens.
+"""
 import os
+import re
+import uuid
+from datetime import datetime, timezone
+from functools import wraps
 
 import boto3
 from botocore.exceptions import ClientError
-from flask import Flask, Response, abort, flash, redirect, render_template, request, url_for
+from flask import (Flask, Response, abort, flash, redirect, render_template, request,
+                   session, url_for)
+from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 BUCKET = os.environ.get("BUCKET_ENTRADA", "imagens-entrada")
+TABELA = os.environ.get("TABELA_USUARIOS", "usuarios")
 EXTENSOES = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-troque-em-producao")
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB por upload
 
 
+# O endpoint vem de AWS_ENDPOINT_URL (LocalStack); sem ela, fala com a AWS real.
 def s3():
-    # O endpoint vem de AWS_ENDPOINT_URL (LocalStack); sem ela, fala com a AWS real.
     return boto3.client("s3")
 
 
+def usuarios():
+    return boto3.resource("dynamodb").Table(TABELA)
+
+
+def login_obrigatorio(view):
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if "usuario_id" not in session:
+            flash("Entre na sua conta para continuar.", "erro")
+            return redirect(url_for("login"))
+        return view(*args, **kwargs)
+    return wrapper
+
+
+def prefixo():
+    """Pasta do usuário logado no bucket: cada um só enxerga a sua."""
+    return f"usuarios/{session['usuario_id']}/"
+
+
+# ---------- Contas (DynamoDB) ----------
+
+@app.route("/cadastro", methods=["GET", "POST"])
+def cadastro():
+    if request.method == "POST":
+        nome = request.form.get("nome", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        senha = request.form.get("senha", "")
+
+        if not nome or not EMAIL_RE.match(email):
+            flash("Informe nome e um e-mail válido.", "erro")
+        elif len(senha) < 6:
+            flash("A senha precisa ter pelo menos 6 caracteres.", "erro")
+        else:
+            try:
+                usuarios().put_item(
+                    Item={
+                        "email": email,
+                        "id": uuid.uuid4().hex,
+                        "nome": nome,
+                        "senha_hash": generate_password_hash(senha),  # nunca a senha pura
+                        "criado_em": datetime.now(timezone.utc).isoformat(),
+                    },
+                    # não sobrescreve conta existente
+                    ConditionExpression="attribute_not_exists(email)",
+                )
+            except ClientError as e:
+                if e.response["Error"]["Code"] != "ConditionalCheckFailedException":
+                    raise
+                flash("Já existe uma conta com esse e-mail.", "erro")
+            else:
+                flash("Conta criada! Agora é só entrar.", "ok")
+                return redirect(url_for("login"))
+    return render_template("cadastro.html")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        senha = request.form.get("senha", "")
+        item = usuarios().get_item(Key={"email": email}).get("Item")
+
+        # mesma mensagem para e-mail inexistente e senha errada (não revela quem tem conta)
+        if not item or not check_password_hash(item["senha_hash"], senha):
+            flash("E-mail ou senha inválidos.", "erro")
+        else:
+            session.clear()
+            session.update(usuario_id=item["id"], nome=item["nome"], email=item["email"])
+            return redirect(url_for("index"))
+    return render_template("login.html")
+
+
+@app.post("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+# ---------- Imagens (S3) ----------
+
 @app.get("/")
+@login_obrigatorio
 def index():
-    resp = s3().list_objects_v2(Bucket=BUCKET)
+    resp = s3().list_objects_v2(Bucket=BUCKET, Prefix=prefixo())
     arquivos = sorted(resp.get("Contents", []), key=lambda o: o["LastModified"], reverse=True)
+    for a in arquivos:
+        a["Nome"] = a["Key"][len(prefixo()):]
     return render_template("index.html", arquivos=arquivos)
 
 
 @app.post("/upload")
+@login_obrigatorio
 def upload():
     arquivo = request.files.get("arquivo")
     if not arquivo or not arquivo.filename:
@@ -38,19 +134,19 @@ def upload():
         flash("Envie uma imagem (jpg, png, gif ou webp).", "erro")
         return redirect(url_for("index"))
 
-    s3().upload_fileobj(arquivo, BUCKET, nome,
+    s3().upload_fileobj(arquivo, BUCKET, prefixo() + nome,
                         ExtraArgs={"ContentType": arquivo.mimetype or "application/octet-stream"})
     flash(f"{nome} enviado!", "ok")
     return redirect(url_for("index"))
 
 
-@app.get("/download/<path:chave>")
-def download(chave):
+@app.get("/download/<path:nome>")
+@login_obrigatorio
+def download(nome):
     try:
-        obj = s3().get_object(Bucket=BUCKET, Key=chave)
+        obj = s3().get_object(Bucket=BUCKET, Key=prefixo() + nome)
     except ClientError:
         abort(404)
-    nome = chave.rsplit("/", 1)[-1]
     return Response(obj["Body"].iter_chunks(), mimetype=obj.get("ContentType"),
                     headers={"Content-Disposition": f'attachment; filename="{nome}"'})
 
